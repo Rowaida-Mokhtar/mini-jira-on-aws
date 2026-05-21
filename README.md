@@ -84,7 +84,7 @@ Create `.env` files from `.env.example` in backend and frontend folders.
 - Rana Abouraia
 - Mohamed Serag
 - Seif Zaky
-- Youssef 
+- Youssef Afifi
 
 ## Course
 Software Cloud Computing 2026 - Dr. John Zaki
