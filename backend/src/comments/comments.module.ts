@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ActivityLogModule } from '../activity-log/activity-log.module';
 import { AwsModule } from '../aws/aws.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { CommentsController } from './comments.controller';
@@ -6,7 +7,7 @@ import { CommentsRepository } from './comments.repository';
 import { CommentsService } from './comments.service';
 
 @Module({
-  imports: [AwsModule, TasksModule],
+  imports: [AwsModule, TasksModule, ActivityLogModule],
   controllers: [CommentsController],
   providers: [CommentsService, CommentsRepository],
   exports: [CommentsService, CommentsRepository],

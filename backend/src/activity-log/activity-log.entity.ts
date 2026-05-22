@@ -1,8 +1,12 @@
 export type ActivityAction =
   | 'ASSIGNED'
+  | 'TASK_CREATED'
   | 'TASK_ASSIGNED'
+  | 'TASK_ASSIGNEE_CHANGED'
   | 'TASK_STATUS_CHANGED'
-  | 'TASK_ASSIGNEE_CHANGED';
+  | 'TASK_IMAGE_UPLOADED'
+  | 'TASK_IMAGE_DELETED'
+  | 'TASK_COMMENTED';
 
 export type ActivityLog = {
   id: string;

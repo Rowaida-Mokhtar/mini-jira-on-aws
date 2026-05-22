@@ -49,6 +49,11 @@ export class TasksController {
     return this.tasksService.findAll(user);
   }
 
+  @Get('my')
+  findMyTasks(@CurrentUser() user: AuthUser) {
+    return this.tasksService.findMyTasks(user);
+  }
+
   @Get(':id')
   findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.tasksService.findOne(user, id);

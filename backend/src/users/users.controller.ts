@@ -1,9 +1,12 @@
 import {
+  Body,
   Controller,
   Get,
   HttpException,
   InternalServerErrorException,
   Logger,
+  Param,
+  Patch,
   Post,
   UnauthorizedException,
   UseGuards,
@@ -11,6 +14,7 @@ import {
 import type { AuthUser } from '../auth/auth-user.type';
 import { CognitoJwtGuard } from '../auth/cognito-jwt.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { AssignUserTeamDto } from './dto/assign-user-team.dto';
 import { UsersService } from './users.service';
 
 @UseGuards(CognitoJwtGuard)
@@ -56,6 +60,24 @@ export class UsersController {
         this.getSafeProfileErrorMessage(error, 'load'),
       );
     }
+  }
+
+  @Get()
+  findAll(@CurrentUser() user: AuthUser | undefined) {
+    return this.usersService.findAll(this.requireAuthUser(user));
+  }
+
+  @Patch(':id/team')
+  assignTeam(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: AssignUserTeamDto,
+  ) {
+    return this.usersService.assignTeam(
+      this.requireAuthUser(user),
+      id,
+      dto.teamId,
+    );
   }
 
   private requireAuthUser(user: AuthUser | undefined): AuthUser {

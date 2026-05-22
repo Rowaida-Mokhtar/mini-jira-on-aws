@@ -85,6 +85,7 @@ export class TasksService {
     };
 
     const createdTask = await this.tasksRepository.create(task);
+    await this.activityLogService.createTaskCreated(createdTask, user.userId);
     await this.activityLogService.createTaskAssigned(createdTask, user.userId);
     await this.publishTaskAssignedEvent(createdTask);
 
@@ -98,6 +99,12 @@ export class TasksService {
 
     this.assertEmployeeHasTeam(user);
     return this.tasksRepository.findByTeamId(user.teamId);
+  }
+
+  async findMyTasks(user: AuthUser): Promise<Task[]> {
+    const tasks = await this.tasksRepository.findByAssigneeId(user.userId);
+
+    return tasks.filter((task) => canAccessTeamResource(user, task.teamId));
   }
 
   async findOne(user: AuthUser, id: string): Promise<Task> {
@@ -139,11 +146,6 @@ export class TasksService {
       requestedUpdate.assigneeId &&
       requestedUpdate.assigneeId !== existing.assigneeId
     ) {
-      await this.activityLogService.createTaskAssigneeChanged(
-        savedTask,
-        existing.assigneeId,
-        user.userId,
-      );
       await this.activityLogService.createTaskAssigned(savedTask, user.userId);
       await this.publishTaskAssignedEvent(savedTask);
     }
@@ -189,7 +191,10 @@ export class TasksService {
       updatedAt: uploadedAt,
     };
 
-    return this.tasksRepository.put(updated);
+    const savedTask = await this.tasksRepository.put(updated);
+    await this.activityLogService.createTaskImageUploaded(savedTask, user.userId);
+
+    return savedTask;
   }
 
   async deleteImage(user: AuthUser, taskId: string): Promise<Task> {
@@ -212,7 +217,10 @@ export class TasksService {
       updatedAt: new Date().toISOString(),
     };
 
-    return this.tasksRepository.put(updated);
+    const savedTask = await this.tasksRepository.put(updated);
+    await this.activityLogService.createTaskImageDeleted(savedTask, user.userId);
+
+    return savedTask;
   }
 
   private async getExistingTask(id: string): Promise<Task> {

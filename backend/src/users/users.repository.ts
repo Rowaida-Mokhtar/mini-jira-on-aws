@@ -1,11 +1,11 @@
-import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { Inject, Injectable } from '@nestjs/common';
 import { DYNAMODB_DOCUMENT_CLIENT } from '../aws/aws.constants';
 import { AppConfigService } from '../config/app-config.service';
 import { User } from './user.entity';
 
 type DynamoDbDocumentClient = {
-  send(command: GetCommand | PutCommand): Promise<unknown>;
+  send(command: GetCommand | PutCommand | ScanCommand): Promise<unknown>;
 };
 
 @Injectable()
@@ -40,5 +40,17 @@ export class UsersRepository {
     )) as { Item?: User };
 
     return result.Item;
+  }
+
+  async findAll(): Promise<User[]> {
+    const result = (await this.documentClient.send(
+      new ScanCommand({
+        TableName: this.tableName,
+      }),
+    )) as { Items?: User[] };
+
+    return (result.Items ?? []).sort((left, right) =>
+      left.email.localeCompare(right.email),
+    );
   }
 }

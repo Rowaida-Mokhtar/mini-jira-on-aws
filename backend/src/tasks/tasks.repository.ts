@@ -76,9 +76,10 @@ export class TasksRepository {
 
   async findByAssigneeId(assigneeId: string): Promise<Task[]> {
     const result = (await this.documentClient.send(
-      new ScanCommand({
+      new QueryCommand({
         TableName: this.tableName,
-        FilterExpression: 'assigneeId = :assigneeId',
+        IndexName: 'assigneeId-index',
+        KeyConditionExpression: 'assigneeId = :assigneeId',
         ExpressionAttributeValues: {
           ':assigneeId': assigneeId,
         },

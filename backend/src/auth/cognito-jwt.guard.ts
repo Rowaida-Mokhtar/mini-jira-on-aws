@@ -1,11 +1,14 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { Request } from 'express';
 import { createRemoteJWKSet, jwtVerify, JWTPayload } from 'jose';
+import { DYNAMODB_DOCUMENT_CLIENT } from '../aws/aws.constants';
 import { AppConfigService } from '../config/app-config.service';
 import { AuthUser } from './auth-user.type';
 import { UserRole } from './user-role.enum';
@@ -14,15 +17,25 @@ type RequestWithUser = Request & {
   user?: AuthUser;
 };
 
+type DynamoDbDocumentClient = {
+  send(command: GetCommand): Promise<unknown>;
+};
+
 @Injectable()
 export class CognitoJwtGuard implements CanActivate {
   private readonly cognitoIssuer: string;
   private readonly cognitoClientId: string;
   private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
+  private readonly usersTableName: string;
 
-  constructor(config: AppConfigService) {
+  constructor(
+    config: AppConfigService,
+    @Inject(DYNAMODB_DOCUMENT_CLIENT)
+    private readonly documentClient: DynamoDbDocumentClient,
+  ) {
     this.cognitoIssuer = `https://cognito-idp.${config.awsRegion}.amazonaws.com/${config.cognitoUserPoolId}`;
     this.cognitoClientId = config.cognitoClientId;
+    this.usersTableName = config.get('USERS_TABLE');
     this.jwks = createRemoteJWKSet(
       new URL(`${this.cognitoIssuer}/.well-known/jwks.json`),
     );
@@ -33,7 +46,9 @@ export class CognitoJwtGuard implements CanActivate {
     const token = this.getBearerToken(request);
 
     if (token) {
-      request.user = await this.verifyCognitoToken(token);
+      request.user = await this.enrichWithStoredProfile(
+        await this.verifyCognitoToken(token),
+      );
       return true;
     }
 
@@ -103,6 +118,28 @@ export class CognitoJwtGuard implements CanActivate {
       email,
       role,
       teamId,
+    };
+  }
+
+  private async enrichWithStoredProfile(user: AuthUser): Promise<AuthUser> {
+    const result = (await this.documentClient.send(
+      new GetCommand({
+        TableName: this.usersTableName,
+        Key: { id: user.userId },
+      }),
+    )) as {
+      Item?: {
+        role?: string;
+        teamId?: string;
+      };
+    };
+
+    const storedRole = result.Item?.role;
+
+    return {
+      ...user,
+      role: this.isUserRole(storedRole) ? storedRole : user.role,
+      teamId: result.Item?.teamId || user.teamId,
     };
   }
 

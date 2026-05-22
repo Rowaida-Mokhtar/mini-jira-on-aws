@@ -10,6 +10,14 @@ import { ActivityLogRepository } from './activity-log.repository';
 export class ActivityLogService {
   constructor(private readonly activityLogRepository: ActivityLogRepository) {}
 
+  createTaskCreated(task: Task, actorId: string) {
+    return this.createTaskLog({
+      action: 'TASK_CREATED',
+      task,
+      actorId,
+    });
+  }
+
   createTaskAssigned(task: Task, actorId: string) {
     return this.createTaskLog({
       action: 'TASK_ASSIGNED',
@@ -29,17 +37,27 @@ export class ActivityLogService {
     });
   }
 
-  createTaskAssigneeChanged(
-    task: Task,
-    previousAssigneeId: string,
-    actorId: string,
-  ) {
+  createTaskImageUploaded(task: Task, actorId: string) {
     return this.createTaskLog({
-      action: 'TASK_ASSIGNEE_CHANGED',
+      action: 'TASK_IMAGE_UPLOADED',
       task,
       actorId,
-      previousAssigneeId,
-      assigneeId: task.assigneeId,
+    });
+  }
+
+  createTaskImageDeleted(task: Task, actorId: string) {
+    return this.createTaskLog({
+      action: 'TASK_IMAGE_DELETED',
+      task,
+      actorId,
+    });
+  }
+
+  createTaskCommented(task: Task, actorId: string) {
+    return this.createTaskLog({
+      action: 'TASK_COMMENTED',
+      task,
+      actorId,
     });
   }
 

@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
+import { ActivityLogService } from '../activity-log/activity-log.service';
 import { AuthUser } from '../auth/auth-user.type';
 import { canAccessTeamResource } from '../auth/authorization.helper';
 import { TasksRepository } from '../tasks/tasks.repository';
@@ -16,6 +17,7 @@ export class CommentsService {
   constructor(
     private readonly commentsRepository: CommentsRepository,
     private readonly tasksRepository: TasksRepository,
+    private readonly activityLogService: ActivityLogService,
   ) {}
 
   async create(
@@ -36,7 +38,10 @@ export class CommentsService {
       updatedAt: now,
     };
 
-    return this.commentsRepository.create(comment);
+    const createdComment = await this.commentsRepository.create(comment);
+    await this.activityLogService.createTaskCommented(task, user.userId);
+
+    return createdComment;
   }
 
   async findByTaskId(user: AuthUser, taskId: string): Promise<Comment[]> {
