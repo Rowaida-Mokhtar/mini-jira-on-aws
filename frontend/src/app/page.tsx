@@ -108,6 +108,10 @@ export default function Home() {
   const selectedTaskComments =
     commentsTaskId === selectedTask?.id ? comments : [];
   const isManager = profile?.role === "MANAGER";
+  const canUpdateTaskStatus = useCallback(
+    (task: Task) => isManager || task.assigneeId === profile?.id,
+    [isManager, profile?.id],
+  );
   const effectiveProjectId = taskForm.projectId || projects[0]?.id || "";
   const effectiveTaskProject = projects.find(
     (project) => project.id === effectiveProjectId,
@@ -128,6 +132,7 @@ export default function Home() {
 
     return teamUsers.length ? teamUsers : employeeUsers;
   }, [effectiveTaskTeamId, employeeUsers]);
+  const assignableTeamUsers = employeeUsers;
   const teamTaskCounts = useMemo(() => {
     return teams.map((team) => ({
       team,
@@ -708,7 +713,12 @@ export default function Home() {
                               <select
                                 className="mt-3 h-9 w-full rounded border border-[#d8dee7] bg-white px-2 text-sm text-[#344054]"
                                 value={task.status}
-                                disabled={isSaving}
+                                disabled={isSaving || !canUpdateTaskStatus(task)}
+                                title={
+                                  !canUpdateTaskStatus(task)
+                                    ? "Only the assigned team member or a manager can update this task status"
+                                    : undefined
+                                }
                                 onChange={(event) =>
                                   updateTaskStatus(
                                     task,
@@ -726,6 +736,11 @@ export default function Home() {
                                   </option>
                                 ))}
                               </select>
+                              {!canUpdateTaskStatus(task) ? (
+                                <p className="mt-2 text-xs text-[#697586]">
+                                  Only the assigned employee can change this task status.
+                                </p>
+                              ) : null}
                             </article>
                           ))}
                     </div>
@@ -769,31 +784,37 @@ export default function Home() {
                       Assign users
                     </h3>
                     <div className="mt-4 space-y-3">
-                      {users.map((user) => (
-                        <label
-                          className="block text-sm font-medium text-[#344054]"
-                          key={user.id}
-                        >
-                          {user.email}
-                          <select
-                            className="mt-1 h-10 w-full rounded border border-[#cfd7e3] bg-white px-3 text-sm outline-none focus:border-[#2f80ed]"
-                            value={user.teamId || ""}
-                            disabled={isSaving || !teams.length}
-                            onChange={(event) =>
-                              assignUserTeam(user.id, event.target.value)
-                            }
+                      {assignableTeamUsers.length ? (
+                        assignableTeamUsers.map((user) => (
+                          <label
+                            className="block text-sm font-medium text-[#344054]"
+                            key={user.id}
                           >
-                            <option value="" disabled>
-                              Select team
-                            </option>
-                            {teams.map((team) => (
-                              <option key={team.id} value={team.id}>
-                                {team.name}
+                            {user.email}
+                            <select
+                              className="mt-1 h-10 w-full rounded border border-[#cfd7e3] bg-white px-3 text-sm outline-none focus:border-[#2f80ed]"
+                              value={user.teamId || ""}
+                              disabled={isSaving || !teams.length}
+                              onChange={(event) =>
+                                assignUserTeam(user.id, event.target.value)
+                              }
+                            >
+                              <option value="" disabled>
+                                Select team
                               </option>
-                            ))}
-                          </select>
-                        </label>
-                      ))}
+                              {teams.map((team) => (
+                                <option key={team.id} value={team.id}>
+                                  {team.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ))
+                      ) : (
+                        <p className="rounded-md border border-dashed border-[#cfd7e3] p-3 text-sm text-[#697586]">
+                          No employees available for team assignment.
+                        </p>
+                      )}
                       {!users.length ? (
                         <p className="rounded-md border border-dashed border-[#cfd7e3] p-3 text-sm text-[#697586]">
                           No user profiles yet.
