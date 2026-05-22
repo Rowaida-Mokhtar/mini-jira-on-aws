@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 const DEFAULTS = {
-  PORT: '3001',
+  PORT: '3000',
   AWS_REGION: 'us-east-1',
   COGNITO_USER_POOL_ID: 'us-east-1_MnU14fJhg',
   COGNITO_CLIENT_ID: '38hfjgaegfe0agdqn2n6a41pmh',

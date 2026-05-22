@@ -14,6 +14,7 @@ import {
   canAccessTeamResource,
   requireManager,
 } from '../auth/authorization.helper';
+import { ActivityLogService } from '../activity-log/activity-log.service';
 import { UserRole } from '../auth/user-role.enum';
 import { S3_CLIENT, SNS_CLIENT } from '../aws/aws.constants';
 import { AppConfigService } from '../config/app-config.service';
@@ -61,6 +62,7 @@ export class TasksService {
     @Inject(SNS_CLIENT)
     private readonly snsClient: SnsClientLike,
     private readonly config: AppConfigService,
+    private readonly activityLogService: ActivityLogService,
   ) {}
 
   async create(user: AuthUser, dto: CreateTaskDto): Promise<Task> {
@@ -83,6 +85,8 @@ export class TasksService {
     };
 
     const createdTask = await this.tasksRepository.create(task);
+    await this.activityLogService.createTaskCreated(createdTask, user.userId);
+    await this.activityLogService.createTaskAssigned(createdTask, user.userId);
     await this.publishTaskAssignedEvent(createdTask);
 
     return createdTask;
@@ -95,6 +99,12 @@ export class TasksService {
 
     this.assertEmployeeHasTeam(user);
     return this.tasksRepository.findByTeamId(user.teamId);
+  }
+
+  async findMyTasks(user: AuthUser): Promise<Task[]> {
+    const tasks = await this.tasksRepository.findByAssigneeId(user.userId);
+
+    return tasks.filter((task) => canAccessTeamResource(user, task.teamId));
   }
 
   async findOne(user: AuthUser, id: string): Promise<Task> {
@@ -119,7 +129,28 @@ export class TasksService {
       updatedAt: new Date().toISOString(),
     };
 
-    return this.tasksRepository.put(updated);
+    const savedTask = await this.tasksRepository.put(updated);
+
+    if (
+      requestedUpdate.status &&
+      requestedUpdate.status !== existing.status
+    ) {
+      await this.activityLogService.createTaskStatusChanged(
+        savedTask,
+        existing.status,
+        user.userId,
+      );
+    }
+
+    if (
+      requestedUpdate.assigneeId &&
+      requestedUpdate.assigneeId !== existing.assigneeId
+    ) {
+      await this.activityLogService.createTaskAssigned(savedTask, user.userId);
+      await this.publishTaskAssignedEvent(savedTask);
+    }
+
+    return savedTask;
   }
 
   async delete(user: AuthUser, id: string): Promise<void> {
@@ -160,7 +191,10 @@ export class TasksService {
       updatedAt: uploadedAt,
     };
 
-    return this.tasksRepository.put(updated);
+    const savedTask = await this.tasksRepository.put(updated);
+    await this.activityLogService.createTaskImageUploaded(savedTask, user.userId);
+
+    return savedTask;
   }
 
   async deleteImage(user: AuthUser, taskId: string): Promise<Task> {
@@ -183,7 +217,10 @@ export class TasksService {
       updatedAt: new Date().toISOString(),
     };
 
-    return this.tasksRepository.put(updated);
+    const savedTask = await this.tasksRepository.put(updated);
+    await this.activityLogService.createTaskImageDeleted(savedTask, user.userId);
+
+    return savedTask;
   }
 
   private async getExistingTask(id: string): Promise<Task> {

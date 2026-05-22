@@ -10,7 +10,9 @@ import {
   requireManager,
 } from '../auth/authorization.helper';
 import { CreateTeamDto } from './dto/create-team.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
 import { Team } from './team.entity';
+import { TeamOption } from './team-option.type';
 import { TeamsRepository } from './teams.repository';
 
 @Injectable()
@@ -26,6 +28,7 @@ export class TeamsService {
     const team: Team = {
       id: uuidv4(),
       name: dto.name,
+      description: dto.description,
       createdAt: now,
       updatedAt: now,
     };
@@ -53,5 +56,61 @@ export class TeamsService {
     }
 
     return [team];
+  }
+
+  async findOptions(): Promise<TeamOption[]> {
+    const teams = await this.teamsRepository.findAll();
+
+    return teams
+      .map((team) => ({
+        id: team.id,
+        name: team.name,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async findOne(user: AuthUser, id: string): Promise<Team> {
+    const team = await this.getExistingTeam(id);
+
+    if (!canAccessTeamResource(user, team.id)) {
+      throw new ForbiddenException('Cannot access another team');
+    }
+
+    return team;
+  }
+
+  async update(user: AuthUser, id: string, dto: UpdateTeamDto): Promise<Team> {
+    this.assertManager(user, 'Only managers can update teams');
+
+    const existing = await this.getExistingTeam(id);
+    const updated: Team = {
+      ...existing,
+      ...dto,
+      updatedAt: new Date().toISOString(),
+    };
+
+    return this.teamsRepository.put(updated);
+  }
+
+  async delete(user: AuthUser, id: string): Promise<void> {
+    this.assertManager(user, 'Only managers can delete teams');
+    await this.getExistingTeam(id);
+    await this.teamsRepository.delete(id);
+  }
+
+  private async getExistingTeam(id: string): Promise<Team> {
+    const team = await this.teamsRepository.findById(id);
+
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+
+    return team;
+  }
+
+  private assertManager(user: AuthUser, message: string): void {
+    if (!requireManager(user)) {
+      throw new ForbiddenException(message);
+    }
   }
 }
