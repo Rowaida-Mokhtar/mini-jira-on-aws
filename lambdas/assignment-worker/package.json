@@ -1,0 +1,15 @@
+{
+  "name": "mini-jira-worker-v2",
+  "version": "1.0.0",
+  "description": "SQS assignment worker for Mini-Jira task assignment activity logs and metrics.",
+  "main": "index.js",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "zip": "powershell -NoProfile -Command \"if (Test-Path mini-jira-worker-v2.zip) { Remove-Item mini-jira-worker-v2.zip -Force }; Compress-Archive -Path index.js,package.json,package-lock.json,node_modules -DestinationPath mini-jira-worker-v2.zip -Force\""
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1052.0",
+    "@aws-sdk/client-dynamodb": "^3.1052.0"
+  }
+}

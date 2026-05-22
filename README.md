@@ -1,93 +1,61 @@
-# Mini-Jira on AWS
+Mini-Jira on AWS is a university Software Cloud Computing project: a lightweight Jira/Trello-style task management app built phase by phase for AWS.
 
-> Event-driven task management platform deployed on AWS with high availability across 2 Availability Zones
+## Stack
 
-## Live Application
-[CloudFront URL](https://your-cloudfront-url.cloudfront.net) *(Update after deployment)*
+- Frontend: Next.js with TypeScript
+- Backend: NestJS with TypeScript
+- Database: AWS DynamoDB
+- Auth: AWS Cognito JWT validation in the backend
+- Storage: Amazon S3 for task image attachments
+- Events: Amazon SNS, Amazon SQS, and AWS Lambda
+- Scheduling: Amazon EventBridge daily digest Lambda
+- Monitoring: Amazon CloudWatch custom metrics, dashboard, and alarm
+- Deployment target: AWS `us-east-1` N. Virginia region
 
-## Architecture
-![Architecture Diagram](./diagrams/architecture.png)
+## Free-Tier Warning
 
-### AWS Services Used
-| Service | Purpose |
-|---------|---------|
-| EC2 + Auto Scaling | Host Node.js backend across 2 AZs |
-| Application Load Balancer | Distribute traffic + health checks |
-| CloudFront | CDN for low-latency delivery |
-| DynamoDB | Store Tasks, Projects, Comments, Users, Teams |
-| S3 (2 buckets) | Original images + resized thumbnails |
-| Lambda (3 functions) | Image resize, assignment worker, daily digest |
-| SNS + SQS | Event fan-out + decoupled processing |
-| EventBridge | Scheduled daily digest (9:00 AM) |
-| Cognito | Authentication + role/team attributes |
-| CloudWatch | Dashboard + alarms + custom metrics |
-| VPC | Public/private subnets across 2 AZs + NAT gateway |
+This project must stay free-tier friendly. Do not create AWS resources until the relevant phase, and always review pricing, retention settings, alarms, and cleanup steps before deploying anything.
 
-## Features
-- Role-based access (Manager / Employee)
-- Team isolation enforced server-side (GSI on teamId)
-- Task lifecycle: To Do → In Progress → In Review → Done
-- Image upload + automatic resizing (Lambda trigger)
-- Event-driven notifications (SNS → Email + SQS)
-- Daily digest of due tasks (EventBridge → Lambda)
-- Kanban board with drag-and-drop
-- Comments thread + audit log
-- CloudWatch monitoring dashboard
+## Phase-Based Roadmap
 
-## Tech Stack
-- **Frontend**: React 18 + Tailwind CSS + shadcn/ui
-- **Backend**: Node.js + Express (TypeScript)
-- **Database**: DynamoDB (GSIs on teamId, assigneeId)
-- **Auth**: AWS Cognito
-- **Infrastructure**: AWS (see architecture above)
+1. Monorepo base: create the backend, frontend, lambdas, infrastructure, and docs structure.
+2. Backend API foundation: add NestJS modules, environment configuration, validation, and server-side authorization structure.
+3. DynamoDB data layer: add tables and access code for users, teams, projects, tasks, comments, and activity log.
+4. Authentication: validate AWS Cognito JWTs in the backend.
+5. Core app features: implement projects, tasks, comments, task status flow, and status-change audit logging.
+6. Frontend app: add manager and employee views with team-aware task visibility.
+7. S3 attachments: support task image uploads while retaining old image versions.
+8. Event pipeline: add SNS, SQS, and Lambda assignment notifications.
+9. Scheduled digest: add EventBridge daily digest Lambda.
+10. Monitoring: add CloudWatch custom metrics, dashboard, and alarm.
+11. Deployment: add VPC, subnets, ALB, EC2 Auto Scaling Group, CloudFront, and deployment documentation.
 
-## Project Structure
-mini-jira-on-aws/
-├── backend/
-│ ├── src/
-│ │ ├── controllers/ # API logic + team isolation
-│ │ ├── models/ # DynamoDB schemas
-│ │ ├── routes/ # Express routes
-│ │ ├── middleware/ # Cognito token validation
-│ │ ├── services/ # S3, SNS, DynamoDB clients
-│ │ └── lambdas/ # 3 Lambda functions
-│ ├── package.json
-│ └── tsconfig.json
-├── frontend/
-│ ├── src/
-│ │ ├── components/ # Kanban, TaskModal, Comments
-│ │ ├── pages/ # Login, Dashboard, TeamView
-│ │ └── hooks/ # useAuth, useTasks
-│ └── package.json
-├── infrastructure/
-│ ├── terraform/ # IaC (optional)
-│ └── scripts/ # Deployment scripts
-├── diagrams/
-│ └── architecture.png # Architecture diagram
-└── .gitignore
+## Required AWS Services
 
-## Environment Variables
-Create `.env` files from `.env.example` in backend and frontend folders.
+- Amazon Cognito
+- Amazon DynamoDB
+- Amazon S3
+- Amazon SNS
+- Amazon SQS
+- AWS Lambda
+- Amazon EventBridge
+- Amazon CloudWatch
+- Amazon EC2
+- Elastic Load Balancing
+- Amazon CloudFront
+- Amazon VPC
 
-## Demo Credentials
-| Role | Email | Password |
-|------|-------|----------|
-| Manager | manager@example.com | Demo123! |
-| Employee (Frontend) | sara@example.com | Demo123! |
-| Employee (Backend) | omar@example.com | Demo123! |
+## Local Development
 
-## Demo Video
-[Link to demo video] *(Add after recording)*
+Backend and frontend apps are scaffolded but no business logic or AWS integration code has been added yet.
 
-## Team
-- Rowaida Mokhtar
-- Rana Abouraia
-- Mohamed Serag
-- Seif Zaky
-- Youssef Afifi
+```bash
+cd backend
+npm run start:dev
+```
 
-## Course
-Software Cloud Computing 2026 - Dr. John Zaki
-
-## Deadline
-22/5/2026
+```bash
+cd frontend
+npm run dev
+```
+>>>>>>> sego

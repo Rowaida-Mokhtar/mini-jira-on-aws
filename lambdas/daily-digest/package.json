@@ -1,0 +1,19 @@
+{
+  "name": "mini-jira-daily-digest",
+  "version": "1.0.0",
+  "description": "EventBridge daily digest Lambda for Mini-Jira tasks due today.",
+  "main": "index.js",
+  "type": "commonjs",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "zip": "powershell -NoProfile -Command \"if (Test-Path mini-jira-daily-digest.zip) { Remove-Item mini-jira-daily-digest.zip -Force }; Compress-Archive -Path index.js,package.json,package-lock.json,node_modules -DestinationPath mini-jira-daily-digest.zip -Force\""
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1052.0",
+    "@aws-sdk/client-sns": "^3.1052.0",
+    "@aws-sdk/lib-dynamodb": "^3.1052.0"
+  }
+}

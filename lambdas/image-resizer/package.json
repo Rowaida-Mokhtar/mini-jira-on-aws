@@ -1,0 +1,22 @@
+{
+  "name": "mini-jira-image-resizer",
+  "version": "1.0.0",
+  "description": "S3-triggered image thumbnail Lambda for Mini-Jira on AWS.",
+  "main": "index.js",
+  "type": "commonjs",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "clean": "powershell -NoProfile -Command \"Remove-Item -Recurse -Force node_modules,package-lock.json,image-resizer.zip -ErrorAction SilentlyContinue\"",
+    "install:lambda": "npm install --os=linux --cpu=x64 --libc=glibc --include=optional",
+    "install:lambda:legacy-flags": "npm install --platform=linux --arch=x64 --include=optional",
+    "package:lambda": "npm run clean && npm run install:lambda && npm run zip",
+    "zip": "powershell -NoProfile -Command \"if (Test-Path image-resizer.zip) { Remove-Item image-resizer.zip -Force }; Compress-Archive -Path index.js,package.json,package-lock.json,node_modules -DestinationPath image-resizer.zip -Force\""
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1052.0",
+    "sharp": "^0.34.5"
+  }
+}
