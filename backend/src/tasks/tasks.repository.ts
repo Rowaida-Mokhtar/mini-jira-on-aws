@@ -2,6 +2,7 @@ import {
   DeleteCommand,
   GetCommand,
   PutCommand,
+  QueryCommand,
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { Inject, Injectable } from '@nestjs/common';
@@ -11,7 +12,12 @@ import { Task } from './task.entity';
 
 type DynamoDbDocumentClient = {
   send(
-    command: DeleteCommand | GetCommand | PutCommand | ScanCommand,
+    command:
+      | DeleteCommand
+      | GetCommand
+      | PutCommand
+      | QueryCommand
+      | ScanCommand,
   ): Promise<unknown>;
 };
 
@@ -55,9 +61,10 @@ export class TasksRepository {
 
   async findByTeamId(teamId: string): Promise<Task[]> {
     const result = (await this.documentClient.send(
-      new ScanCommand({
+      new QueryCommand({
         TableName: this.tableName,
-        FilterExpression: 'teamId = :teamId',
+        IndexName: 'teamId-index',
+        KeyConditionExpression: 'teamId = :teamId',
         ExpressionAttributeValues: {
           ':teamId': teamId,
         },
