@@ -58,4 +58,7 @@ npm run start:dev
 cd frontend
 npm run dev
 ```
->>>>>>> sego
+
+## SUBISSION 
+# https://d2abi2mqrclj5d.cloudfront.net/login
+# https://drive.google.com/drive/folders/1WmzeD0P9kjKd8gPzjlgmrX8FnO8Cn3Kq?usp=sharing

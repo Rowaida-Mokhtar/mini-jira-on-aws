@@ -1,21 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
-import { getStoredSession, signIn } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
+import { signIn } from "@/lib/auth";
 import { syncUserProfile } from "@/lib/api";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (getStoredSession()) {
-      window.location.href = "/";
-    }
-  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,7 +21,7 @@ export default function LoginPage() {
     try {
       const session = await signIn(email.trim(), password);
       await syncUserProfile(session);
-      window.location.href = "/";
+      router.replace("/");
     } catch (nextError) {
       setError(readError(nextError));
     } finally {

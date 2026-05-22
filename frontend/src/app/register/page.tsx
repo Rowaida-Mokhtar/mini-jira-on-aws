@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { syncUserProfile } from "@/lib/api";
 import { confirmRegistration, registerUser, Role, signIn } from "@/lib/auth";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("EMPLOYEE");
@@ -45,7 +47,7 @@ export default function RegisterPage() {
       await confirmRegistration(email.trim(), confirmationCode.trim());
       const session = await signIn(email.trim(), password);
       await syncUserProfile(session);
-      window.location.href = "/";
+      router.replace("/");
     } catch (nextError) {
       setError(readError(nextError));
     } finally {

@@ -1,8 +1,17 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AuthSession,
+  clearStoredSession,
   getStoredSession,
   isSessionExpired,
   refreshStoredSession,
@@ -32,6 +41,8 @@ const priorities: TaskPriority[] = ["LOW", "MEDIUM", "HIGH"];
 const dateInputValue = (date: Date) => date.toISOString().slice(0, 10);
 
 export default function Home() {
+  const router = useRouter();
+  const hasRedirectedToLogin = useRef(false);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -220,34 +231,48 @@ export default function Home() {
   }, [api, profile]);
 
   useEffect(() => {
-    async function restoreSession() {
-      const storedSession = getStoredSession();
-
-      if (!storedSession) {
-        window.location.href = "/login";
+    function redirectToLogin() {
+      if (hasRedirectedToLogin.current) {
         return;
       }
 
-      if (isSessionExpired(storedSession)) {
-        const refreshedSession = await refreshStoredSession();
+      hasRedirectedToLogin.current = true;
+      router.replace("/login");
+    }
 
-        if (!refreshedSession) {
-          window.location.href = "/login";
+    async function restoreSession() {
+      try {
+        const storedSession = getStoredSession();
+
+        if (!storedSession) {
+          redirectToLogin();
           return;
         }
 
-        setSession(refreshedSession);
-        setProfile(await syncUserProfile(refreshedSession));
-      } else {
-        setSession(storedSession);
-        setProfile(await syncUserProfile(storedSession));
-      }
+        const activeSession = isSessionExpired(storedSession)
+          ? await refreshStoredSession()
+          : storedSession;
 
-      setIsCheckingAuth(false);
+        if (!activeSession) {
+          redirectToLogin();
+          return;
+        }
+
+        const userProfile = await syncUserProfile(activeSession);
+
+        setSession(activeSession);
+        setProfile(userProfile);
+        setIsCheckingAuth(false);
+      } catch {
+        clearStoredSession();
+        setSession(null);
+        setProfile(null);
+        redirectToLogin();
+      }
     }
 
     void restoreSession();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!session || !profile) {
