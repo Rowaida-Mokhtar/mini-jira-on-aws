@@ -72,6 +72,14 @@ export function clearStoredSession() {
   userPool.getCurrentUser()?.signOut();
 }
 
+export function signOut(redirectTo = "/login") {
+  clearStoredSession();
+
+  if (typeof window !== "undefined") {
+    window.location.href = redirectTo;
+  }
+}
+
 export async function refreshStoredSession() {
   const currentSession = getStoredSession();
 

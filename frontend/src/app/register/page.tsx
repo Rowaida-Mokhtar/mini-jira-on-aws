@@ -9,7 +9,6 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("EMPLOYEE");
-  const [teamId, setTeamId] = useState("");
   const [confirmationCode, setConfirmationCode] = useState("");
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,7 +26,6 @@ export default function RegisterPage() {
         email: email.trim(),
         password,
         role,
-        teamId: teamId.trim() || undefined,
       });
       setIsConfirming(true);
       setMessage("Check your email for a Cognito confirmation code.");
@@ -131,16 +129,6 @@ export default function RegisterPage() {
                 <option value="EMPLOYEE">Employee</option>
                 <option value="MANAGER">Manager</option>
               </select>
-            </label>
-            <label className="block text-sm font-medium text-[#344054]">
-              Team ID
-              <input
-                className="mt-1 h-11 w-full rounded border border-[#cfd7e3] px-3 text-sm outline-none focus:border-[#2f80ed]"
-                value={teamId}
-                placeholder={role === "EMPLOYEE" ? "Required for employees" : ""}
-                required={role === "EMPLOYEE"}
-                onChange={(event) => setTeamId(event.target.value)}
-              />
             </label>
             <button
               className="h-11 w-full rounded-md bg-[#1f6feb] px-3 text-sm font-semibold text-white transition hover:bg-[#1a5fcc] disabled:cursor-not-allowed disabled:opacity-60"

@@ -61,9 +61,13 @@ export type ActivityLog = {
   id: string;
   action:
     | "ASSIGNED"
+    | "TASK_CREATED"
     | "TASK_ASSIGNED"
+    | "TASK_ASSIGNEE_CHANGED"
     | "TASK_STATUS_CHANGED"
-    | "TASK_ASSIGNEE_CHANGED";
+    | "TASK_IMAGE_UPLOADED"
+    | "TASK_IMAGE_DELETED"
+    | "TASK_COMMENTED";
   taskId: string;
   title?: string;
   teamId: string;

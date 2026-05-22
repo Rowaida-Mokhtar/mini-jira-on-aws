@@ -3,10 +3,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AuthSession,
-  clearStoredSession,
   getStoredSession,
   isSessionExpired,
   refreshStoredSession,
+  signOut,
 } from "@/lib/auth";
 import { apiRequest, syncUserProfile } from "@/lib/api";
 import {
@@ -39,8 +39,10 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState("all");
+  const [selectedTeamId, setSelectedTeamId] = useState("all");
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -63,6 +65,7 @@ export default function Home() {
   }));
   const [commentBody, setCommentBody] = useState("");
   const [commentsTaskId, setCommentsTaskId] = useState("");
+  const [taskImageFile, setTaskImageFile] = useState<File | null>(null);
 
   const activeProject =
     selectedProjectId === "all"
@@ -71,13 +74,21 @@ export default function Home() {
   const activeTeamId = profile?.teamId || teams[0]?.id || "";
   const visibleTasks = useMemo(() => {
     return tasks.filter((task) => {
+      if (
+        profile?.role === "MANAGER" &&
+        selectedTeamId !== "all" &&
+        task.teamId !== selectedTeamId
+      ) {
+        return false;
+      }
+
       if (selectedProjectId !== "all" && task.projectId !== selectedProjectId) {
         return false;
       }
 
-      return profile?.role === "MANAGER" || task.assigneeId === profile?.id;
+      return true;
     });
-  }, [profile?.id, profile?.role, selectedProjectId, tasks]);
+  }, [profile?.role, selectedProjectId, selectedTeamId, tasks]);
   const taskCounts = useMemo(() => {
     return statuses.reduce<Record<TaskStatus, number>>(
       (counts, status) => {
@@ -96,6 +107,7 @@ export default function Home() {
   const selectedTask = tasks.find((task) => task.id === effectiveSelectedTaskId);
   const selectedTaskComments =
     commentsTaskId === selectedTask?.id ? comments : [];
+  const isManager = profile?.role === "MANAGER";
   const effectiveProjectId = taskForm.projectId || projects[0]?.id || "";
   const effectiveTaskProject = projects.find(
     (project) => project.id === effectiveProjectId,
@@ -105,6 +117,23 @@ export default function Home() {
     activeProject?.teamId ||
     taskForm.teamId ||
     activeTeamId;
+  const employeeUsers = useMemo(
+    () => users.filter((user) => user.role === "EMPLOYEE"),
+    [users],
+  );
+  const assignableUsers = useMemo(() => {
+    const teamUsers = employeeUsers.filter(
+      (user) => user.teamId === effectiveTaskTeamId,
+    );
+
+    return teamUsers.length ? teamUsers : employeeUsers;
+  }, [effectiveTaskTeamId, employeeUsers]);
+  const teamTaskCounts = useMemo(() => {
+    return teams.map((team) => ({
+      team,
+      count: tasks.filter((task) => task.teamId === team.id).length,
+    }));
+  }, [tasks, teams]);
 
   const api = useCallback(
     async <T,>(path: string, options: RequestInit = {}) => {
@@ -134,24 +163,26 @@ export default function Home() {
     setError("");
 
     try {
-      const [nextTeams, nextProjects, nextTasks, nextActivityLogs] =
+      const [nextTeams, nextProjects, nextTasks, nextActivityLogs, nextUsers] =
         await Promise.all([
-        api<Team[]>("/teams"),
-        api<Project[]>("/projects"),
-        api<Task[]>("/tasks"),
+          api<Team[]>("/teams"),
+          api<Project[]>("/projects"),
+          api<Task[]>("/tasks"),
           api<ActivityLog[]>("/activity-log"),
+          profile?.role === "MANAGER"
+            ? api<UserProfile[]>("/users")
+            : Promise.resolve([]),
         ]);
 
       const nextTeamId = profile?.teamId || nextTeams[0]?.id || "";
       const nextProjectId = nextProjects[0]?.id || "";
-      const nextSelectedTask = nextTasks.find((task) => {
-        return profile?.role === "MANAGER" || task.assigneeId === profile?.id;
-      });
+      const nextSelectedTask = nextTasks[0];
 
       setTeams(nextTeams);
       setProjects(nextProjects);
       setTasks(nextTasks);
       setActivityLogs(nextActivityLogs);
+      setUsers(nextUsers);
       setProjectForm((current) => ({
         ...current,
         teamId: current.teamId || nextTeamId,
@@ -160,7 +191,11 @@ export default function Home() {
         ...current,
         teamId: current.teamId || nextTeamId,
         projectId: current.projectId || nextProjectId,
-        assigneeId: current.assigneeId || profile?.id || "",
+        assigneeId:
+          current.assigneeId ||
+          nextUsers.find((user) => user.role === "EMPLOYEE" && user.teamId === nextTeamId)
+            ?.id ||
+          "",
       }));
 
       if (nextSelectedTask) {
@@ -219,18 +254,32 @@ export default function Home() {
     void loadWorkspace();
   }, [loadWorkspace, profile, session]);
 
-  function logout() {
-    clearStoredSession();
-    window.location.href = "/login";
-  }
+  useEffect(() => {
+    if (!isManager || !assignableUsers.length) {
+      return;
+    }
+
+    if (assignableUsers.some((user) => user.id === taskForm.assigneeId)) {
+      return;
+    }
+
+    // Keep the create form on a real employee profile as team/project filters change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTaskForm((current) => ({
+      ...current,
+      assigneeId: assignableUsers[0].id,
+    }));
+  }, [assignableUsers, isManager, taskForm.assigneeId]);
 
   function selectProject(projectId: string) {
     setSelectedProjectId(projectId);
     const nextTask = tasks.find((task) => {
       const projectMatches = projectId === "all" || task.projectId === projectId;
-      const roleMatches =
-        profile?.role === "MANAGER" || task.assigneeId === profile?.id;
-      return projectMatches && roleMatches;
+      const teamMatches =
+        profile?.role !== "MANAGER" ||
+        selectedTeamId === "all" ||
+        task.teamId === selectedTeamId;
+      return projectMatches && teamMatches;
     });
 
     setSelectedTaskId(nextTask?.id || "");
@@ -257,6 +306,26 @@ export default function Home() {
       setTeamForm({ name: "" });
       setProjectForm((current) => ({ ...current, teamId: team.id }));
       setTaskForm((current) => ({ ...current, teamId: team.id }));
+    } catch (nextError) {
+      setError(readError(nextError));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function assignUserTeam(userId: string, teamId: string) {
+    setIsSaving(true);
+    setError("");
+
+    try {
+      const updatedUser = await api<UserProfile>(`/users/${userId}/team`, {
+        method: "PATCH",
+        body: JSON.stringify({ teamId }),
+      });
+
+      setUsers((current) =>
+        current.map((user) => (user.id === userId ? updatedUser : user)),
+      );
     } catch (nextError) {
       setError(readError(nextError));
     } finally {
@@ -300,6 +369,11 @@ export default function Home() {
       return;
     }
 
+    if (!taskForm.assigneeId.trim()) {
+      setError("Select an employee assignee before creating the task.");
+      return;
+    }
+
     setIsSaving(true);
     setError("");
 
@@ -314,10 +388,31 @@ export default function Home() {
           assigneeId: taskForm.assigneeId.trim(),
         }),
       });
-      setTasks((current) => [task, ...current]);
-      setSelectedTaskId(task.id);
-      setCommentsTaskId(task.id);
+      let savedTask = task;
+
+      if (taskImageFile) {
+        const imageForm = new FormData();
+        imageForm.set("image", taskImageFile);
+
+        try {
+          savedTask = await api<Task>(`/tasks/${task.id}/image`, {
+            method: "POST",
+            body: imageForm,
+          });
+        } catch (uploadError) {
+          setError(`Task created, but image upload failed: ${readError(uploadError)}`);
+        }
+      }
+
+      if (taskImageFile && savedTask.imageUrl) {
+        setTasks(await api<Task[]>("/tasks"));
+      } else {
+        setTasks((current) => [savedTask, ...current]);
+      }
+      setSelectedTaskId(savedTask.id);
+      setCommentsTaskId(savedTask.id);
       setComments([]);
+      setTaskImageFile(null);
       setTaskForm((current) => ({
         ...current,
         title: "",
@@ -385,8 +480,6 @@ export default function Home() {
     );
   }
 
-  const isManager = profile.role === "MANAGER";
-
   return (
     <main className="min-h-screen bg-[#f6f7f9] text-[#17202a]">
       <div className="flex min-h-screen flex-col lg:flex-row">
@@ -408,7 +501,9 @@ export default function Home() {
               <div className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-[#d6e2ef]">
                 <p className="font-medium text-white">{profile.email}</p>
                 <p className="mt-1">Role: {profile.role}</p>
-                <p className="mt-1">Team: {profile.teamId || activeTeamId || "None"}</p>
+                <p className="mt-1">
+                  Team: {teamName(teams, profile.teamId || activeTeamId)}
+                </p>
               </div>
             </section>
 
@@ -451,9 +546,9 @@ export default function Home() {
             <button
               className="mt-auto rounded-md border border-white/15 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
               type="button"
-              onClick={logout}
+              onClick={() => signOut()}
             >
-              Log out
+              Sign out
             </button>
           </div>
         </aside>
@@ -466,9 +561,29 @@ export default function Home() {
                   {activeProject ? activeProject.name : "All active work"}
                 </p>
                 <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[#111827]">
-                  {isManager ? "Manager board" : "My assigned tasks"}
+                  {isManager ? "Manager board" : "My team tasks"}
                 </h2>
               </div>
+              {isManager ? (
+                <label className="min-w-48 text-sm font-medium text-[#344054]">
+                  Team filter
+                  <select
+                    className="mt-1 h-10 w-full rounded border border-[#cfd7e3] bg-white px-3 text-sm outline-none focus:border-[#2f80ed]"
+                    value={selectedTeamId}
+                    onChange={(event) => {
+                      setSelectedTeamId(event.target.value);
+                      setSelectedTaskId("");
+                    }}
+                  >
+                    <option value="all">All teams</option>
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <div className="grid grid-cols-4 gap-2 sm:flex">
                 {statuses.map((status) => (
                   <div
@@ -491,6 +606,43 @@ export default function Home() {
             <div className="border-b border-[#f2c6b4] bg-[#fff4ef] px-5 py-3 text-sm text-[#9a3412]">
               {error}
             </div>
+          ) : null}
+
+          {isManager ? (
+            <section className="border-b border-[#d8dee7] bg-white px-5 py-4">
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+                <div className="rounded-md border border-[#d8dee7] bg-[#f9fafb] p-3">
+                  <p className="text-xs font-medium text-[#697586]">
+                    Visible tasks
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[#111827]">
+                    {visibleTasks.length}
+                  </p>
+                </div>
+                {teamTaskCounts.map(({ team, count }) => (
+                  <button
+                    className={`rounded-md border p-3 text-left transition ${
+                      selectedTeamId === team.id
+                        ? "border-[#2f80ed] bg-[#eff6ff]"
+                        : "border-[#d8dee7] bg-[#f9fafb] hover:border-[#9fb6d6]"
+                    }`}
+                    key={team.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedTeamId(team.id);
+                      setSelectedTaskId("");
+                    }}
+                  >
+                    <p className="truncate text-xs font-medium text-[#697586]">
+                      {team.name}
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-[#111827]">
+                      {count}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </section>
           ) : null}
 
           <div className="grid flex-1 grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -584,32 +736,72 @@ export default function Home() {
 
             <aside className="space-y-4">
               {isManager ? (
-                <section className="rounded-md border border-[#d8dee7] bg-white p-4">
-                  <h3 className="text-base font-semibold text-[#111827]">
-                    New team
-                  </h3>
-                  <form className="mt-4 space-y-3" onSubmit={createTeam}>
-                    <label className="block text-sm font-medium text-[#344054]">
-                      Name
-                      <input
-                        className="mt-1 h-10 w-full rounded border border-[#cfd7e3] px-3 text-sm outline-none focus:border-[#2f80ed]"
-                        value={teamForm.name}
-                        required
-                        maxLength={100}
-                        onChange={(event) =>
-                          setTeamForm({ name: event.target.value })
-                        }
-                      />
-                    </label>
-                    <button
-                      className="h-10 w-full rounded-md bg-[#102033] px-3 text-sm font-semibold text-white transition hover:bg-[#1c324d] disabled:cursor-not-allowed disabled:opacity-60"
-                      type="submit"
-                      disabled={isSaving}
-                    >
-                      Create team
-                    </button>
-                  </form>
-                </section>
+                <>
+                  <section className="rounded-md border border-[#d8dee7] bg-white p-4">
+                    <h3 className="text-base font-semibold text-[#111827]">
+                      New team
+                    </h3>
+                    <form className="mt-4 space-y-3" onSubmit={createTeam}>
+                      <label className="block text-sm font-medium text-[#344054]">
+                        Name
+                        <input
+                          className="mt-1 h-10 w-full rounded border border-[#cfd7e3] px-3 text-sm outline-none focus:border-[#2f80ed]"
+                          value={teamForm.name}
+                          required
+                          maxLength={100}
+                          onChange={(event) =>
+                            setTeamForm({ name: event.target.value })
+                          }
+                        />
+                      </label>
+                      <button
+                        className="h-10 w-full rounded-md bg-[#102033] px-3 text-sm font-semibold text-white transition hover:bg-[#1c324d] disabled:cursor-not-allowed disabled:opacity-60"
+                        type="submit"
+                        disabled={isSaving}
+                      >
+                        Create team
+                      </button>
+                    </form>
+                  </section>
+
+                  <section className="rounded-md border border-[#d8dee7] bg-white p-4">
+                    <h3 className="text-base font-semibold text-[#111827]">
+                      Assign users
+                    </h3>
+                    <div className="mt-4 space-y-3">
+                      {users.map((user) => (
+                        <label
+                          className="block text-sm font-medium text-[#344054]"
+                          key={user.id}
+                        >
+                          {user.email}
+                          <select
+                            className="mt-1 h-10 w-full rounded border border-[#cfd7e3] bg-white px-3 text-sm outline-none focus:border-[#2f80ed]"
+                            value={user.teamId || ""}
+                            disabled={isSaving || !teams.length}
+                            onChange={(event) =>
+                              assignUserTeam(user.id, event.target.value)
+                            }
+                          >
+                            <option value="" disabled>
+                              Select team
+                            </option>
+                            {teams.map((team) => (
+                              <option key={team.id} value={team.id}>
+                                {team.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                      {!users.length ? (
+                        <p className="rounded-md border border-dashed border-[#cfd7e3] p-3 text-sm text-[#697586]">
+                          No user profiles yet.
+                        </p>
+                      ) : null}
+                    </div>
+                  </section>
+                </>
               ) : null}
 
               <section className="rounded-md border border-[#d8dee7] bg-white p-4">
@@ -804,19 +996,33 @@ export default function Home() {
                     </label>
                   </div>
                   <label className="block text-sm font-medium text-[#344054]">
-                    Assignee user ID
-                    <input
-                      className="mt-1 h-10 w-full rounded border border-[#cfd7e3] px-3 text-sm outline-none focus:border-[#2f80ed]"
+                    Assignee
+                    <select
+                      className="mt-1 h-10 w-full rounded border border-[#cfd7e3] bg-white px-3 text-sm outline-none focus:border-[#2f80ed]"
                       value={taskForm.assigneeId}
                       required
-                      disabled={!isManager}
+                      disabled={!isManager || !assignableUsers.length}
                       onChange={(event) =>
                         setTaskForm((current) => ({
                           ...current,
                           assigneeId: event.target.value,
                         }))
                       }
-                    />
+                    >
+                      <option value="" disabled>
+                        Select employee
+                      </option>
+                      {assignableUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.email} - {teamName(teams, user.teamId)}
+                        </option>
+                      ))}
+                    </select>
+                    {!assignableUsers.length ? (
+                      <span className="mt-1 block text-xs font-normal text-[#9a3412]">
+                        Assign an employee to a team before creating tasks.
+                      </span>
+                    ) : null}
                   </label>
                   <label className="block text-sm font-medium text-[#344054]">
                     Description
@@ -833,10 +1039,27 @@ export default function Home() {
                       }
                     />
                   </label>
+                  <label className="block text-sm font-medium text-[#344054]">
+                    Image attachment
+                    <input
+                      className="mt-1 block w-full text-sm text-[#344054] file:mr-3 file:h-9 file:rounded-md file:border-0 file:bg-[#eef2f6] file:px-3 file:text-sm file:font-semibold file:text-[#344054]"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      disabled={!isManager}
+                      onChange={(event) =>
+                        setTaskImageFile(event.target.files?.[0] || null)
+                      }
+                    />
+                    {taskImageFile ? (
+                      <span className="mt-1 block text-xs font-normal text-[#697586]">
+                        {taskImageFile.name}
+                      </span>
+                    ) : null}
+                  </label>
                   <button
                     className="h-10 w-full rounded-md bg-[#0f766e] px-3 text-sm font-semibold text-white transition hover:bg-[#0b5f59] disabled:cursor-not-allowed disabled:opacity-60"
                     type="submit"
-                    disabled={isSaving || !isManager}
+                    disabled={isSaving || !isManager || !assignableUsers.length}
                   >
                     {isManager ? "Create task" : "Manager only"}
                   </button>
@@ -866,7 +1089,10 @@ export default function Home() {
                         value={labelForStatus(selectedTask.status)}
                       />
                       <Detail label="Priority" value={selectedTask.priority} />
-                      <Detail label="Assignee" value={selectedTask.assigneeId} />
+                      <Detail
+                        label="Assignee"
+                        value={userLabel(users, selectedTask.assigneeId)}
+                      />
                       <Detail label="Due" value={formatDate(selectedTask.deadline)} />
                     </dl>
                     {selectedTask.imageUrl ? (
@@ -950,11 +1176,39 @@ function projectName(projects: Project[], projectId: string) {
   return projects.find((project) => project.id === projectId)?.name || "No project";
 }
 
+function teamName(teams: Team[], teamId: string | undefined) {
+  if (!teamId) {
+    return "None";
+  }
+
+  return teams.find((team) => team.id === teamId)?.name || teamId;
+}
+
+function userLabel(users: UserProfile[], userId: string) {
+  return users.find((user) => user.id === userId)?.email || userId;
+}
+
 function labelForStatus(status: TaskStatus) {
   return statuses.find((item) => item.value === status)?.label || status;
 }
 
 function formatActivityAction(action: ActivityLog["action"]) {
+  if (action === "TASK_CREATED") {
+    return "Task created";
+  }
+
+  if (action === "TASK_COMMENTED") {
+    return "Comment added";
+  }
+
+  if (action === "TASK_IMAGE_UPLOADED") {
+    return "Image uploaded";
+  }
+
+  if (action === "TASK_IMAGE_DELETED") {
+    return "Image deleted";
+  }
+
   if (action === "TASK_STATUS_CHANGED") {
     return "Status changed";
   }
