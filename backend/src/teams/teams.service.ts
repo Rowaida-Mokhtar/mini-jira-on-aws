@@ -12,6 +12,7 @@ import {
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { Team } from './team.entity';
+import { TeamOption } from './team-option.type';
 import { TeamsRepository } from './teams.repository';
 
 @Injectable()
@@ -55,6 +56,17 @@ export class TeamsService {
     }
 
     return [team];
+  }
+
+  async findOptions(): Promise<TeamOption[]> {
+    const teams = await this.teamsRepository.findAll();
+
+    return teams
+      .map((team) => ({
+        id: team.id,
+        name: team.name,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   async findOne(user: AuthUser, id: string): Promise<Team> {
