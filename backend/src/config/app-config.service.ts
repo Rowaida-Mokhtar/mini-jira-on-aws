@@ -13,6 +13,8 @@ const DEFAULTS = {
   ACTIVITY_LOG_TABLE: 'MiniJiraActivityLog',
   TASK_IMAGES_BUCKET: 'mini-jira-swprojectgiu-2026-originals',
   RESIZED_IMAGES_BUCKET: 'mini-jira-swprojectgiu-2026-resized',
+  ASSIGNMENT_TOPIC_ARN:
+    'arn:aws:sns:us-east-1:317112500169:mini-jira-task-assignments',
 } as const;
 
 type DefaultEnvKey = keyof typeof DEFAULTS;
@@ -56,5 +58,9 @@ export class AppConfigService {
 
   get taskImagesBucket(): string {
     return this.get('TASK_IMAGES_BUCKET');
+  }
+
+  get assignmentTopicArn(): string {
+    return this.get('ASSIGNMENT_TOPIC_ARN');
   }
 }

@@ -1,9 +1,11 @@
+import { PublishCommand } from '@aws-sdk/client-sns';
 import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import {
   BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,7 +15,7 @@ import {
   requireManager,
 } from '../auth/authorization.helper';
 import { UserRole } from '../auth/user-role.enum';
-import { S3_CLIENT } from '../aws/aws.constants';
+import { S3_CLIENT, SNS_CLIENT } from '../aws/aws.constants';
 import { AppConfigService } from '../config/app-config.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -44,12 +46,20 @@ type S3ClientLike = {
   send(command: PutObjectCommand | DeleteObjectCommand): Promise<unknown>;
 };
 
+type SnsClientLike = {
+  send(command: PublishCommand): Promise<unknown>;
+};
+
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(
     private readonly tasksRepository: TasksRepository,
     @Inject(S3_CLIENT)
     private readonly s3Client: S3ClientLike,
+    @Inject(SNS_CLIENT)
+    private readonly snsClient: SnsClientLike,
     private readonly config: AppConfigService,
   ) {}
 
@@ -72,7 +82,10 @@ export class TasksService {
       updatedAt: now,
     };
 
-    return this.tasksRepository.create(task);
+    const createdTask = await this.tasksRepository.create(task);
+    await this.publishTaskAssignedEvent(createdTask);
+
+    return createdTask;
   }
 
   async findAll(user: AuthUser): Promise<Task[]> {
@@ -260,5 +273,39 @@ export class TasksService {
   private createImageUrl(imageKey: string): string {
     const encodedKey = imageKey.split('/').map(encodeURIComponent).join('/');
     return `https://${this.config.taskImagesBucket}.s3.${this.config.awsRegion}.amazonaws.com/${encodedKey}`;
+  }
+
+  private async publishTaskAssignedEvent(task: Task): Promise<void> {
+    try {
+      await this.snsClient.send(
+        new PublishCommand({
+          TopicArn: this.config.assignmentTopicArn,
+          Message: JSON.stringify({
+            taskId: task.id,
+            title: task.title,
+            projectId: task.projectId,
+            teamId: task.teamId,
+            assigneeId: task.assigneeId,
+            assignedBy: task.createdBy,
+            assignedAt: task.createdAt,
+          }),
+          MessageAttributes: {
+            eventType: {
+              DataType: 'String',
+              StringValue: 'TASK_ASSIGNED',
+            },
+            teamId: {
+              DataType: 'String',
+              StringValue: task.teamId,
+            },
+          },
+        }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to publish TASK_ASSIGNED event for task ${task.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 }
